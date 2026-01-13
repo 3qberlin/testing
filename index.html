@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>快速題目生成與核對工具</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        .option-btn.active { background-color: #3b82f6; color: white; border-color: #3b82f6; }
+        .correct-option-btn.active { background-color: #10b981; color: white; border-color: #10b981; }
+        .wrong-option-btn.active { background-color: #ef4444; color: white; border-color: #ef4444; }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen pb-32">
+
+    <!-- Header -->
+    <header class="bg-white border-b sticky top-0 z-10 shadow-sm">
+        <div class="max-w-4xl mx-auto px-4 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
+            <h1 class="text-xl font-bold text-slate-800 flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                </svg>
+                流水號測驗助手
+            </h1>
+            
+            <div class="flex items-center gap-2">
+                <input type="number" id="qInput" min="1" max="50" placeholder="題數" class="w-20 border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition-all">
+                <button onclick="addQuestions()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-semibold transition-colors shadow-sm active:scale-95">
+                    新增題目
+                </button>
+                <button id="toggleModeBtn" onclick="toggleMode()" class="hidden bg-slate-800 hover:bg-slate-900 text-white px-4 py-2 rounded-lg font-semibold transition-colors shadow-sm active:scale-95">
+                    進入核對模式
+                </button>
+                <button onclick="confirmReset()" class="text-slate-400 hover:text-red-500 p-2 transition-colors" title="清空所有資料">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-4xl mx-auto px-4 mt-8">
+        <!-- 空狀態顯示 -->
+        <div id="emptyState" class="text-center py-20 bg-white rounded-2xl border-2 border-dashed border-slate-200">
+            <div class="text-slate-400 mb-4">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                </svg>
+            </div>
+            <h2 class="text-lg font-semibold text-slate-600">目前沒有題目</h2>
+            <p class="text-slate-400">請在上方輸入要「新增」的題數</p>
+        </div>
+
+        <!-- 題目清單 -->
+        <div id="quizContainer" class="space-y-4 hidden">
+            <!-- 題目會動態插入於此 -->
+        </div>
+
+        <!-- 重置確認彈窗 (Custom Modal) -->
+        <div id="resetModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 hidden">
+            <div class="bg-white p-6 rounded-2xl max-w-sm w-full mx-4 shadow-2xl">
+                <h3 class="text-xl font-bold text-slate-800 mb-2">確定要清空嗎？</h3>
+                <p class="text-slate-500 mb-6">這將會刪除目前所有的題目紀錄與流水號，且無法復原。</p>
+                <div class="flex gap-3">
+                    <button onclick="closeResetModal()" class="flex-1 px-4 py-2 bg-slate-100 text-slate-600 rounded-lg font-semibold">取消</button>
+                    <button onclick="resetQuiz()" class="flex-1 px-4 py-2 bg-red-500 text-white rounded-lg font-semibold">確定清空</button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- 底部狀態欄 -->
+    <div id="statsBar" class="fixed bottom-0 left-0 right-0 bg-white border-t p-4 shadow-lg transform translate-y-full transition-transform duration-300 z-10">
+        <div class="max-w-4xl mx-auto flex justify-between items-center">
+            <div class="flex gap-4 md:gap-8">
+                <div>
+                    <span class="text-slate-500 text-xs md:text-sm">總題數</span>
+                    <p id="totalCount" class="text-lg md:text-xl font-bold text-slate-800">0</p>
+                </div>
+                <div>
+                    <span class="text-slate-500 text-xs md:text-sm">已作答</span>
+                    <p id="answeredCount" class="text-lg md:text-xl font-bold text-blue-600">0</p>
+                </div>
+                <div class="check-mode-element hidden">
+                    <span class="text-slate-500 text-xs md:text-sm">正確數</span>
+                    <p id="correctCount" class="text-lg md:text-xl font-bold text-emerald-600">0</p>
+                </div>
+            </div>
+            <div class="text-right">
+                <span id="rateLabel" class="text-slate-500 text-xs md:text-sm">作答進度</span>
+                <p id="accuracyRate" class="text-xl md:text-2xl font-black text-slate-800">0%</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 核心狀態
+        let appState = {
+            count: 0, // 當前總題數
+            userAnswers: [],
+            correctAnswers: [],
+            isCheckMode: false
+        };
+
+        const options = ['A', 'B', 'C', 'D'];
+
+        function addQuestions() {
+            const input = document.getElementById('qInput');
+            const addCount = parseInt(input.value);
+            
+            if (!addCount || addCount <= 0) return;
+
+            const startIndex = appState.count; // 從目前的總數開始編號
+            const endIndex = startIndex + addCount;
+
+            // 擴充狀態陣列
+            for (let i = 0; i < addCount; i++) {
+                appState.userAnswers.push(null);
+                appState.correctAnswers.push(null);
+            }
+            
+            appState.count = endIndex;
+
+            renderNewQuestions(startIndex, endIndex);
+            updateStats();
+            
+            // UI 調整
+            input.value = ''; // 清空輸入框
+            document.getElementById('emptyState').classList.add('hidden');
+            document.getElementById('quizContainer').classList.remove('hidden');
+            document.getElementById('toggleModeBtn').classList.remove('hidden');
+            document.getElementById('statsBar').classList.remove('translate-y-full');
+            
+            // 如果在核對模式下新增，需要隱藏新題目的核對區或保持一致
+            if (!appState.isCheckMode) {
+                document.querySelectorAll('.correct-area').forEach(el => el.classList.add('hidden'));
+            }
+        }
+
+        function renderNewQuestions(start, end) {
+            const container = document.getElementById('quizContainer');
+
+            for (let i = start; i < end; i++) {
+                const row = document.createElement('div');
+                row.className = "bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-4 transition-all animate-in fade-in slide-in-from-bottom-2 duration-300";
+                row.id = `q-row-${i}`;
+
+                const qInfo = `
+                    <div class="flex items-center gap-3">
+                        <span class="bg-slate-100 text-slate-600 font-bold w-10 h-10 rounded-full flex items-center justify-center text-sm">${i + 1}</span>
+                        <div id="status-icon-${i}" class="text-xl"></div>
+                    </div>
+                `;
+
+                const userAnswerArea = `
+                    <div class="flex-1">
+                        <p class="text-[10px] text-slate-400 mb-2 font-semibold uppercase tracking-wider">我的答案</p>
+                        <div class="flex gap-2">
+                            ${options.map(opt => `
+                                <button 
+                                    onclick="setUserAnswer(${i}, '${opt}')" 
+                                    id="user-${i}-${opt}"
+                                    class="option-btn border-2 border-slate-200 w-10 h-10 rounded-lg font-bold text-slate-500 hover:border-blue-300 hover:text-blue-500 transition-all active:scale-90"
+                                >${opt}</button>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+
+                const correctArea = `
+                    <div class="correct-area ${appState.isCheckMode ? '' : 'hidden'} flex-1 border-l-0 md:border-l md:pl-6 border-slate-100">
+                        <p class="text-[10px] text-emerald-500 mb-2 font-semibold uppercase tracking-wider">正確答案</p>
+                        <div class="flex gap-2">
+                            ${options.map(opt => `
+                                <button 
+                                    onclick="setCorrectAnswer(${i}, '${opt}')" 
+                                    id="correct-${i}-${opt}"
+                                    class="correct-option-btn border-2 border-slate-200 w-10 h-10 rounded-lg font-bold text-slate-500 hover:border-emerald-300 hover:text-emerald-500 transition-all active:scale-90"
+                                >${opt}</button>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+
+                row.innerHTML = qInfo + userAnswerArea + correctArea;
+                container.appendChild(row);
+            }
+        }
+
+        function setUserAnswer(qIdx, val) {
+            if (appState.isCheckMode) return;
+            
+            appState.userAnswers[qIdx] = val;
+            
+            options.forEach(opt => {
+                document.getElementById(`user-${qIdx}-${opt}`).classList.remove('active');
+            });
+            document.getElementById(`user-${qIdx}-${val}`).classList.add('active');
+            
+            updateStats();
+        }
+
+        function setCorrectAnswer(qIdx, val) {
+            appState.correctAnswers[qIdx] = val;
+            
+            options.forEach(opt => {
+                document.getElementById(`correct-${qIdx}-${opt}`).classList.remove('active');
+            });
+            document.getElementById(`correct-${qIdx}-${val}`).classList.add('active');
+            
+            compareAndMark(qIdx);
+            updateStats();
+        }
+
+        function toggleMode() {
+            appState.isCheckMode = !appState.isCheckMode;
+            const btn = document.getElementById('toggleModeBtn');
+            const correctAreas = document.querySelectorAll('.correct-area');
+            const checkModeStats = document.querySelectorAll('.check-mode-element');
+            const rateLabel = document.getElementById('rateLabel');
+
+            if (appState.isCheckMode) {
+                btn.innerText = "回到作答模式";
+                btn.classList.replace('bg-slate-800', 'bg-orange-600');
+                correctAreas.forEach(el => el.classList.remove('hidden'));
+                checkModeStats.forEach(el => el.classList.remove('hidden'));
+                rateLabel.innerText = "正確率";
+                
+                for(let i=0; i<appState.count; i++) compareAndMark(i);
+            } else {
+                btn.innerText = "進入核對模式";
+                btn.classList.replace('bg-orange-600', 'bg-slate-800');
+                correctAreas.forEach(el => el.classList.add('hidden'));
+                checkModeStats.forEach(el => el.classList.add('hidden'));
+                rateLabel.innerText = "作答進度";
+                
+                for(let i=0; i<appState.count; i++) {
+                    document.getElementById(`status-icon-${i}`).innerHTML = '';
+                    document.getElementById(`q-row-${i}`).classList.remove('bg-emerald-50', 'bg-red-50', 'border-emerald-200', 'border-red-200');
+                }
+            }
+            updateStats();
+        }
+
+        function compareAndMark(qIdx) {
+            if (!appState.isCheckMode) return;
+
+            const icon = document.getElementById(`status-icon-${qIdx}`);
+            const row = document.getElementById(`q-row-${qIdx}`);
+            const userAns = appState.userAnswers[qIdx];
+            const correctAns = appState.correctAnswers[qIdx];
+
+            if (!correctAns) {
+                icon.innerHTML = '';
+                row.classList.remove('bg-emerald-50', 'bg-red-50', 'border-emerald-200', 'border-red-200');
+                return;
+            }
+
+            if (userAns === correctAns) {
+                icon.innerHTML = '<span class="text-emerald-500">✅</span>';
+                row.classList.add('bg-emerald-50', 'border-emerald-200');
+                row.classList.remove('bg-red-50', 'border-red-200');
+            } else {
+                icon.innerHTML = '<span class="text-red-500">❌</span>';
+                row.classList.add('bg-red-50', 'border-red-200');
+                row.classList.remove('bg-emerald-50', 'border-emerald-200');
+            }
+        }
+
+        function updateStats() {
+            const total = appState.count;
+            const answered = appState.userAnswers.filter(a => a !== null).length;
+            const correct = appState.userAnswers.filter((a, i) => a !== null && a === appState.correctAnswers[i]).length;
+            
+            document.getElementById('totalCount').innerText = total;
+            document.getElementById('answeredCount').innerText = answered;
+            document.getElementById('correctCount').innerText = correct;
+
+            let rate = 0;
+            if (appState.isCheckMode) {
+                rate = total > 0 ? Math.round((correct / total) * 100) : 0;
+            } else {
+                rate = total > 0 ? Math.round((answered / total) * 100) : 0;
+            }
+            document.getElementById('accuracyRate').innerText = rate + '%';
+        }
+
+        // 清空邏輯
+        function confirmReset() {
+            if (appState.count === 0) return;
+            document.getElementById('resetModal').classList.remove('hidden');
+        }
+
+        function closeResetModal() {
+            document.getElementById('resetModal').classList.add('hidden');
+        }
+
+        function resetQuiz() {
+            appState = {
+                count: 0,
+                userAnswers: [],
+                correctAnswers: [],
+                isCheckMode: false
+            };
+            
+            document.getElementById('quizContainer').innerHTML = '';
+            document.getElementById('quizContainer').classList.add('hidden');
+            document.getElementById('emptyState').classList.remove('hidden');
+            document.getElementById('toggleModeBtn').classList.add('hidden');
+            document.getElementById('statsBar').classList.add('translate-y-full');
+            
+            // 重置按鈕狀態
+            const btn = document.getElementById('toggleModeBtn');
+            btn.innerText = "進入核對模式";
+            btn.className = "hidden bg-slate-800 hover:bg-slate-900 text-white px-4 py-2 rounded-lg font-semibold transition-colors shadow-sm active:scale-95";
+            
+            closeResetModal();
+            updateStats();
+        }
+    </script>
+</body>
+</html>
